@@ -1,5 +1,4 @@
 require 'net/ftp'
-require 'rubygems'
 begin
   require 'openssl'
 rescue LoadError
@@ -30,7 +29,7 @@ class DoubleBagFTPS < Net::FTP
       begin
         yield ftps
       ensure
-        ftps.close unless ftps.closed?
+        ftps.close
       end
     else
       new(host, user, passwd, acct, ftps_mode, ssl_context_params)
@@ -66,9 +65,9 @@ class DoubleBagFTPS < Net::FTP
         @sock = ssl_socket(@sock)
       end
     end
-    
+
     super(user, passwd, acct)
-    voidcmd('PBSZ 0') # The expected value for Protection Buffer Size (PBSZ) is 0 for TLS/SSL 
+    voidcmd('PBSZ 0') # The expected value for Protection Buffer Size (PBSZ) is 0 for TLS/SSL
     voidcmd('PROT P') # Set data channel protection level to Private
   end
 
@@ -110,7 +109,6 @@ class DoubleBagFTPS < Net::FTP
       conn = ssl_socket(conn) # SSL connection now possible after cmd sent
     else
       sock = makeport
-      sendport(sock.addr[3], sock.addr[1]) if sendport_needed?
       if @resume and rest_offset
         resp = sendcmd('REST ' + rest_offset.to_s)
         if resp[0] != ?3
@@ -131,19 +129,6 @@ class DoubleBagFTPS < Net::FTP
   end
   private :transfercmd
 
-  # Before ruby-2.2.3, makeport called sendport automatically.  After
-  # Ruby 2.3.0, makeport does not call sendport automatically, so do
-  # it ourselves.  This change to Ruby's FTP lib has been backported
-  # to Ruby 2.1 since version 2.1.7.
-  def sendport_needed?
-    @sendport_needed ||= begin
-      Gem::Version.new(RUBY_VERSION) >= Gem::Version.new("2.2.3") ||
-      Gem::Version.new(RUBY_VERSION) >= Gem::Version.new("2.1.7") &&
-      Gem::Version.new(RUBY_VERSION) < Gem::Version.new("2.2.0")
-    end
-  end
-  private :sendport_needed?
-
   def ftps_explicit?; @ftps_mode == EXPLICIT end
   def ftps_implicit?; @ftps_mode == IMPLICIT end
 
@@ -158,16 +143,16 @@ class DoubleBagFTPS < Net::FTP
   def ssl_socket(sock)
     raise 'SSL extension not installed' unless defined?(OpenSSL)
     sock = OpenSSL::SSL::SSLSocket.new(sock, @ssl_context)
-    if @ssl_session
-      sock.session = @ssl_session
-    end
+    # if @ssl_session
+    #   sock.session = @ssl_session
+    # end
     sock.sync_close = true
     sock.connect
     print "get: #{sock.peer_cert.to_text}" if @debug_mode
     unless @ssl_context.verify_mode == OpenSSL::SSL::VERIFY_NONE
       sock.post_connection_check(@hostname)
     end
-    @ssl_session = sock.session
+    #@ssl_session = sock.session
     decorate_socket sock
     return sock
   end
